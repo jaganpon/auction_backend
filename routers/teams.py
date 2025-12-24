@@ -9,6 +9,46 @@ router = APIRouter(
     tags=["Teams"]
 )
 
+@router.post("/")
+async def create_team(
+    tournament_id: int,
+    team_data: dict,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Create a new team in tournament"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Check tournament exists
+    cursor.execute("SELECT * FROM tournaments WHERE id = ?", (tournament_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    
+    try:
+        cursor.execute(
+            """INSERT INTO teams (tournament_id, name, total_budget, remaining_budget) 
+               VALUES (?, ?, ?, ?)""",
+            (tournament_id, team_data['name'], team_data['budget'], team_data['budget'])
+        )
+        team_id = cursor.lastrowid
+        conn.commit()
+        
+        cursor.execute("SELECT * FROM teams WHERE id = ?", (team_id,))
+        team = cursor.fetchone()
+        conn.close()
+        
+        return {
+            "id": team["id"],
+            "name": team["name"],
+            "totalBudget": team["total_budget"],
+            "remainingBudget": team["remaining_budget"]
+        }
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        conn.close()
+        raise HTTPException(status_code=400, detail="Team name already exists in this tournament")
+
 @router.put("/{team_id}")
 async def update_team(
     tournament_id: int,
@@ -173,3 +213,63 @@ async def remove_player_from_team(
     conn.close()
     
     return {"message": "Player removed successfully"}
+
+
+@router.post("/{team_id}/captain")
+async def set_team_captain(
+    tournament_id: int,
+    team_id: int,
+    data: dict,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Set captain and/or vice-captain for a team"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Check if team exists
+    cursor.execute(
+        "SELECT * FROM teams WHERE id = ? AND tournament_id = ?",
+        (team_id, tournament_id)
+    )
+    team = cursor.fetchone()
+    
+    if not team:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    captain_id = data.get('captain_id')
+    vice_captain_id = data.get('vice_captain_id')
+    
+    # Verify players are in this team
+    if captain_id:
+        cursor.execute(
+            "SELECT * FROM players WHERE emp_id = ? AND team_id = ?",
+            (captain_id, team_id)
+        )
+        if not cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Captain must be a member of this team")
+    
+    if vice_captain_id:
+        cursor.execute(
+            "SELECT * FROM players WHERE emp_id = ? AND team_id = ?",
+            (vice_captain_id, team_id)
+        )
+        if not cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Vice-captain must be a member of this team")
+    
+    # Update team
+    cursor.execute(
+        "UPDATE teams SET captain_id = ?, vice_captain_id = ? WHERE id = ?",
+        (captain_id, vice_captain_id, team_id)
+    )
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        "message": "Captain and vice-captain updated successfully",
+        "captain_id": captain_id,
+        "vice_captain_id": vice_captain_id
+    }

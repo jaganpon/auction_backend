@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from database import init_db, get_db, DATABASE_PATH
 
 # Import routers
@@ -15,6 +17,13 @@ app = FastAPI(
     description="Backend API for Cricket Auction Management"
 )
 
+# Create player_images directory if it doesn't exist
+IMAGES_DIR = Path("player_images")
+IMAGES_DIR.mkdir(exist_ok=True)
+
+# Mount static files for player images
+app.mount("/images", StaticFiles(directory="player_images"), name="images")
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -25,13 +34,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Include routers
 app.include_router(auth.router)
 app.include_router(tournaments.router)
 app.include_router(teams.router)
-app.include_router(players.router)
+app.include_router(players.router)  # No prefix - routes defined in players.py
 app.include_router(auction.router)
 
 # ==================== HEALTH CHECK ====================

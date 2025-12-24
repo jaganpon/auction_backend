@@ -154,6 +154,8 @@ async def get_tournament(
             "name": team["name"],
             "totalBudget": team["total_budget"],
             "remainingBudget": team["remaining_budget"],
+            "captain_id": team["captain_id"],
+            "vice_captain_id": team["vice_captain_id"],
             "players": [dict(p) for p in players]
         })
     

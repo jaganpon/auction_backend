@@ -42,12 +42,14 @@ def init_db():
             name TEXT NOT NULL,
             total_budget REAL NOT NULL,
             remaining_budget REAL NOT NULL,
+            captain_id TEXT,
+            vice_captain_id TEXT,
             FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE,
             UNIQUE(tournament_id, name)
         )
     """)
     
-    # Players table
+    # Players table - Check if image_filename column exists, add if not
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,21 +60,38 @@ def init_db():
             type TEXT NOT NULL,
             bid_amount REAL DEFAULT 0,
             is_assigned BOOLEAN DEFAULT 0,
+            image_filename TEXT,
             FOREIGN KEY (tournament_id) REFERENCES tournaments (id) ON DELETE CASCADE,
             FOREIGN KEY (team_id) REFERENCES teams (id) ON DELETE SET NULL,
             UNIQUE(tournament_id, emp_id)
         )
     """)
     
+    # Check if image_filename column exists, if not add it
+    try:
+        cursor.execute("SELECT image_filename FROM players LIMIT 1")
+    except sqlite3.OperationalError:
+        # Column doesn't exist, add it
+        cursor.execute("ALTER TABLE players ADD COLUMN image_filename TEXT")
+        print("✅ Added image_filename column to players table")
+    
+    # Check if captain columns exist in teams, if not add them
+    try:
+        cursor.execute("SELECT captain_id FROM teams LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE teams ADD COLUMN captain_id TEXT")
+        cursor.execute("ALTER TABLE teams ADD COLUMN vice_captain_id TEXT")
+        print("✅ Added captain columns to teams table")
+    
     # Insert default users if not exists
     try:
         cursor.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)", 
-            ("admin", "admin123", "admin")
+            ("admin", "admin@123", "admin")
         )
         cursor.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)", 
-            ("auctioneer", "auction123", "auctioneer")
+            ("auctioneer", "auction@123", "auctioneer")
         )
         cursor.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)", 
